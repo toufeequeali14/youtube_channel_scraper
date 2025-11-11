@@ -95,27 +95,68 @@ try:
     
     # Extract Subscriber Count
     print("\nSearching for subscriber count...")
+    
+    # Debug: Print all span elements with yt-core-attributed-string class
     try:
-        # Method 1: Look for subscriber count element
-        sub_element = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "#subscriber-count"))
-        )
-        sub_text = clean_text(sub_element.text)
-        if sub_text:
-            sub_count = extract_subscriber_count(sub_text)
-            print(f"✓ Subscribers: {sub_count}")
+        debug_spans = driver.find_elements(By.CSS_SELECTOR, "span.yt-core-attributed-string")
+        print(f"Debug: Found {len(debug_spans)} spans with yt-core-attributed-string class")
+        for idx, span in enumerate(debug_spans[:5]):  # Show first 5
+            text = clean_text(span.text)
+            if text:
+                print(f"  Span {idx+1}: '{text}'")
+    except Exception as e:
+        print(f"Debug error: {e}")
+    
+    try:
+        # Method 1: Direct search in all spans
+        all_spans = driver.find_elements(By.TAG_NAME, "span")
+        for span in all_spans:
+            text = clean_text(span.text)
+            if text and "subscriber" in text.lower():
+                sub_count = extract_subscriber_count(text)
+                print(f"✓ Subscribers: {sub_count}")
+                break
     except:
-        # Method 2: Search all text elements
+        pass
+    
+    # Method 2: Try specific selectors if Method 1 failed
+    if sub_count == "Unknown Subscribers":
         try:
-            all_elements = driver.find_elements(By.TAG_NAME, "yt-formatted-string")
-            for element in all_elements:
-                text = clean_text(element.text)
-                if "subscriber" in text.lower():
-                    sub_count = extract_subscriber_count(text)
-                    print(f"✓ Subscribers: {sub_count}")
-                    break
+            sub_selectors = [
+                "span.yt-core-attributed-string",
+                "#subscriber-count span",
+                "#subscriber-count",
+                "yt-formatted-string#subscriber-count",
+                ".yt-core-attributed-string--link-inherit-color"
+            ]
+            
+            for selector in sub_selectors:
+                try:
+                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        sub_text = clean_text(element.text)
+                        if sub_text and "subscriber" in sub_text.lower():
+                            sub_count = extract_subscriber_count(sub_text)
+                            print(f"✓ Subscribers: {sub_count} (using: {selector})")
+                            break
+                    if sub_count != "Unknown Subscribers":
+                        break
+                except:
+                    continue
         except:
-            print("⚠ Could not find subscriber count")
+            pass
+    
+    # Method 3: Look in page source as last resort
+    if sub_count == "Unknown Subscribers":
+        try:
+            page_source = driver.page_source
+            # Look for subscriber count in page source with regex
+            matches = re.findall(r'"subscriberCountText".*?"simpleText":"([^"]+)"', page_source)
+            if matches:
+                sub_count = extract_subscriber_count(matches[0])
+                print(f"✓ Subscribers: {sub_count} (from page source)")
+        except Exception as e:
+            print(f"⚠ Could not find subscriber count: {e}")
     
     # Extract Channel Description
     print("\nSearching for channel description...")
